@@ -1,6 +1,7 @@
 package core
 
 import (
+	"archive/tar"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
@@ -91,6 +92,7 @@ type Session struct {
 	Ports                  []int                         `json:"-"`
 	EventBus               EventBus.Bus                  `json:"-"`
 	WaitGroup              sizedwaitgroup.SizedWaitGroup `json:"-"`
+	OutFile                *os.File                      `json:"-"`
 }
 
 func (s *Session) Start() {
@@ -107,6 +109,10 @@ func (s *Session) Start() {
 
 func (s *Session) End() {
 	s.Stats.FinishedAt = time.Now()
+}
+
+func (s *Session) Close() {
+	_ = s.OutFile.Close()
 }
 
 func (s *Session) AddPage(url string) (*Page, error) {
@@ -138,6 +144,24 @@ func (s *Session) GetPageByUUID(id string) *Page {
 			return page
 		}
 	}
+	return nil
+}
+
+func (s *Session) initPaths() error {
+	if s.Options.OutDir == nil {
+		return fmt.Errorf("output destination must be set")
+	}
+
+	fi, err := os.Stat(*s.Options.OutDir)
+
+	if os.IsNotExist(err) {
+		return fmt.Errorf("output destination %s does not exist", *s.Options.OutDir)
+	}
+
+	if !fi.IsDir() {
+		return fmt.Errorf("output destination must be a directory")
+	}
+
 	return nil
 }
 
@@ -179,9 +203,19 @@ func (s *Session) initPorts() {
 }
 
 func (s *Session) initLogger() {
-	s.Out = &Logger{}
-	s.Out.SetDebug(*s.Options.Debug)
-	s.Out.SetSilent(*s.Options.Silent)
+	var writer io.Writer
+	var noColor bool
+
+	if s.Options.OutFile != nil {
+		outFilePath := filepath.Join(*s.Options.OutDir, *s.Options.OutFile)
+		file, err := os.OpenFile(outFilePath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			writer = file
+			noColor = true
+		}
+	}
+
+	s.Out = NewLogger(writer, *s.Options.Debug, *s.Options.Silent, noColor)
 }
 
 func (s *Session) initThreads() {
@@ -269,6 +303,10 @@ func NewSession() (*Session, error) {
 		return nil, err
 	}
 
+	if err = session.initPaths(); err != nil {
+		return nil, err
+	}
+
 	if *session.Options.ChromePath != "" {
 		if _, err := os.Stat(*session.Options.ChromePath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("Chrome path %s does not exist", *session.Options.ChromePath)
@@ -299,4 +337,115 @@ func NewSession() (*Session, error) {
 	session.Start()
 
 	return &session, nil
+}
+
+func (s *Session) IsFileSaved(file string, timeout time.Duration) bool {
+	timeLimit := time.NewTimer(timeout)
+	_, err := os.Open(file)
+	for err != nil && os.IsNotExist(err) {
+		select {
+		case <-timeLimit.C:
+			return false
+		default:
+			time.Sleep(100 * time.Millisecond)
+			_, err = os.Open(file)
+		}
+	}
+	return err == nil
+}
+
+func (s *Session) Tar() error {
+	tarName := "report.tar.gz"
+	tarPath := filepath.Join(os.TempDir(), tarName)
+
+	err := tarIt(*s.Options.OutDir, tarPath)
+	if err != nil {
+		return err
+	}
+
+	err = removeAll(*s.Options.OutDir)
+	if err != nil {
+		return err
+	}
+
+	dst, err := os.Create(s.GetFilePath(tarName))
+	if err != nil {
+		return err
+	}
+
+	src, err := os.Open(tarPath)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		return err
+	}
+
+	return os.Remove(tarPath)
+}
+
+func tarIt(source, target string) error {
+	tarFile, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer tarFile.Close()
+
+	tarball := tar.NewWriter(tarFile)
+	defer tarball.Close()
+
+	return filepath.Walk(source,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			header, err := tar.FileInfoHeader(info, info.Name())
+			if err != nil {
+				return err
+			}
+
+			header.Name = strings.TrimPrefix(path, source)
+
+			if err = tarball.WriteHeader(header); err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(tarball, file)
+			return err
+		})
+}
+
+func removeAll(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(path, name))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

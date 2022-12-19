@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/michenriksen/aquatone/agents"
-	"github.com/michenriksen/aquatone/core"
-	"github.com/michenriksen/aquatone/parsers"
+	"sdg-git.solar.local/golang/aquatone/agents"
+	"sdg-git.solar.local/golang/aquatone/core"
+	"sdg-git.solar.local/golang/aquatone/parsers"
 )
 
 var (
@@ -52,18 +52,6 @@ func main() {
 	if *sess.Options.Version {
 		sess.Out.Info("%s v%s", core.Name, core.Version)
 		os.Exit(0)
-	}
-
-	fi, err := os.Stat(*sess.Options.OutDir)
-
-	if os.IsNotExist(err) {
-		sess.Out.Fatal("Output destination %s does not exist\n", *sess.Options.OutDir)
-		os.Exit(1)
-	}
-
-	if !fi.IsDir() {
-		sess.Out.Fatal("Output destination must be a directory\n")
-		os.Exit(1)
 	}
 
 	sess.Out.Important("%s v%s started at %s\n\n", core.Name, core.Version, sess.Stats.StartedAt.Format(time.RFC3339))
@@ -162,12 +150,10 @@ func main() {
 		}
 	}
 
-	time.Sleep(1 * time.Second)
 	sess.EventBus.WaitAsync()
 	sess.WaitGroup.Wait()
 
 	sess.EventBus.Publish(core.SessionEnd)
-	time.Sleep(1 * time.Second)
 	sess.EventBus.WaitAsync()
 	sess.WaitGroup.Wait()
 
@@ -266,4 +252,13 @@ func main() {
 	sess.Out.Info(" - Failed     : %v\n\n", sess.Stats.ScreenshotFailed)
 
 	sess.Out.Important("Wrote HTML report to: %s\n\n", sess.GetFilePath("aquatone_report.html"))
+
+	sess.Close()
+
+	if sess.Options.Tar != nil && *sess.Options.Tar {
+		err = sess.Tar()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "tar failed: %v\n", err)
+		}
+	}
 }

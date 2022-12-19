@@ -9,6 +9,7 @@ import (
 type Options struct {
 	Threads           *int
 	OutDir            *string
+	OutFile           *string
 	SessionPath       *string
 	TemplatePath      *string
 	Proxy             *string
@@ -23,12 +24,14 @@ type Options struct {
 	Silent            *bool
 	Debug             *bool
 	Version           *bool
+	Tar               *bool
 }
 
 func ParseOptions() (Options, error) {
 	options := Options{
 		Threads:           flag.Int("threads", 0, "Number of concurrent threads (default number of logical CPUs)"),
 		OutDir:            flag.String("out", ".", "Directory to write files to"),
+		OutFile:           flag.String("out-file", "", "Directory to write files to"),
 		SessionPath:       flag.String("session", "", "Load Aquatone session file and generate HTML report"),
 		TemplatePath:      flag.String("template-path", "", "Path to HTML template to use for report"),
 		Proxy:             flag.String("proxy", "", "Proxy to use for HTTP requests"),
@@ -43,6 +46,7 @@ func ParseOptions() (Options, error) {
 		Silent:            flag.Bool("silent", false, "Suppress all output except for errors"),
 		Debug:             flag.Bool("debug", false, "Print debugging information"),
 		Version:           flag.Bool("version", false, "Print current Aquatone version"),
+		Tar:               flag.Bool("tar", false, "Pack report to .tar.gz archive"),
 	}
 
 	flag.Parse()

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/michenriksen/aquatone/core"
+	"sdg-git.solar.local/golang/aquatone/core"
 )
 
 type URLPageTitleExtractor struct {

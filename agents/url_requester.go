@@ -2,12 +2,13 @@ package agents
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/michenriksen/aquatone/core"
 	"github.com/parnurzeal/gorequest"
+	"sdg-git.solar.local/golang/aquatone/core"
 )
 
 type URLRequester struct {
@@ -56,16 +57,16 @@ func (a *URLRequester) OnURL(url string) {
 		a.session.Stats.IncrementRequestSuccessful()
 		if resp.StatusCode >= 500 {
 			a.session.Stats.IncrementResponseCode5xx()
-			status = Red(resp.Status)
+			status = a.session.Out.Red(resp.Status)
 		} else if resp.StatusCode >= 400 {
 			a.session.Stats.IncrementResponseCode4xx()
-			status = Yellow(resp.Status)
+			status = a.session.Out.Yellow(resp.Status)
 		} else if resp.StatusCode >= 300 {
 			a.session.Stats.IncrementResponseCode3xx()
-			status = Green(resp.Status)
+			status = a.session.Out.Green(resp.Status)
 		} else {
 			a.session.Stats.IncrementResponseCode2xx()
-			status = Green(resp.Status)
+			status = a.session.Out.Green(resp.Status)
 		}
 		a.session.Out.Info("%s: %s\n", url, status)
 
@@ -105,25 +106,35 @@ func (a *URLRequester) writeHeaders(page *core.Page) {
 	for _, header := range page.Headers {
 		headers += fmt.Sprintf("%v: %v\n", header.Name, header.Value)
 	}
-	if err := ioutil.WriteFile(a.session.GetFilePath(filepath), []byte(headers), 0644); err != nil {
+	if err := os.WriteFile(a.session.GetFilePath(filepath), []byte(headers), 0644); err != nil {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
 		a.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
 	}
+
+	if saved := a.session.IsFileSaved(a.session.GetFilePath(filepath), 30*time.Second); !saved {
+		a.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+	}
+
 	page.HeadersPath = filepath
 }
 
 func (a *URLRequester) writeBody(page *core.Page, resp gorequest.Response) {
 	filepath := fmt.Sprintf("html/%s.html", page.BaseFilename())
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
 		a.session.Out.Error("Failed to read response body for %s\n", page.URL)
 		return
 	}
 
-	if err := ioutil.WriteFile(a.session.GetFilePath(filepath), body, 0644); err != nil {
+	if err := os.WriteFile(a.session.GetFilePath(filepath), body, 0644); err != nil {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
 		a.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
 	}
+
+	if saved := a.session.IsFileSaved(a.session.GetFilePath(filepath), 30*time.Second); !saved {
+		a.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+	}
+
 	page.BodyPath = filepath
 }
