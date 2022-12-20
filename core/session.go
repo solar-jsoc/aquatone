@@ -363,11 +363,6 @@ func (s *Session) Tar() error {
 		return err
 	}
 
-	err = removeAll(*s.Options.OutDir)
-	if err != nil {
-		return err
-	}
-
 	dst, err := os.Create(s.GetFilePath(tarName))
 	if err != nil {
 		return err
@@ -426,26 +421,4 @@ func tarIt(source, target string) error {
 			_, err = io.Copy(tarball, file)
 			return err
 		})
-}
-
-func removeAll(path string) error {
-	d, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(path, name))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
