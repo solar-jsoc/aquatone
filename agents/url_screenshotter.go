@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/michenriksen/aquatone/core"
+	"sdg-git.solar.local/golang/aquatone/core"
 )
 
 type URLScreenshotter struct {
@@ -149,11 +149,12 @@ func (a *URLScreenshotter) screenshotPage(page *core.Page) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, a.chromePath, chromeArguments...)
+	defer a.killChromeProcessIfRunning(cmd)
+
 	if err := cmd.Start(); err != nil {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
 		a.session.Stats.IncrementScreenshotFailed()
 		a.session.Out.Error("%s: screenshot failed: %s\n", page.URL, err)
-		a.killChromeProcessIfRunning(cmd)
 		return
 	}
 
@@ -162,20 +163,23 @@ func (a *URLScreenshotter) screenshotPage(page *core.Page) {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
 		if ctx.Err() == context.DeadlineExceeded {
 			a.session.Out.Error("%s: screenshot timed out\n", page.URL)
-			a.killChromeProcessIfRunning(cmd)
-			return
+		} else {
+			a.session.Out.Error("%s: screenshot failed: %s\n", page.URL, err)
 		}
-
-		a.session.Out.Error("%s: screenshot failed: %s\n", page.URL, err)
-		a.killChromeProcessIfRunning(cmd)
 		return
 	}
 
 	a.session.Stats.IncrementScreenshotSuccessful()
-	a.session.Out.Info("%s: %s\n", page.URL, Green("screenshot successful"))
+	a.session.Out.Info("%s: %s\n", page.URL, a.session.Out.Green("screenshot successful"))
 	page.ScreenshotPath = filePath
 	page.HasScreenshot = true
-	a.killChromeProcessIfRunning(cmd)
+
+	saved := a.session.IsFileSaved(filePath, time.Duration(*a.session.Options.ScreenshotTimeout)*time.Millisecond)
+	if !saved {
+		a.session.Out.Error("file %q not saved", filePath)
+	}
+
+	return
 }
 
 func (a *URLScreenshotter) killChromeProcessIfRunning(cmd *exec.Cmd) {

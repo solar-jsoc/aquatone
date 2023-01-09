@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/michenriksen/aquatone/core"
+	"sdg-git.solar.local/golang/aquatone/core"
 )
 
 type URLHostnameResolver struct {

@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/michenriksen/aquatone/core"
+	"sdg-git.solar.local/golang/aquatone/core"
 )
 
 type TCPPortScanner struct {
@@ -34,7 +34,12 @@ func (a *TCPPortScanner) OnHost(host string) {
 			defer a.session.WaitGroup.Done()
 			if a.scanPort(port, host) {
 				a.session.Stats.IncrementPortOpen()
-				a.session.Out.Info("%s: port %s %s\n", host, Green(fmt.Sprintf("%d", port)), Green("open"))
+				a.session.Out.Info(
+					"%s: port %s %s\n",
+					host,
+					a.session.Out.Green(fmt.Sprintf("%d", port)),
+					a.session.Out.Green("open"),
+				)
 				a.session.EventBus.Publish(core.TCPPort, port, host)
 			} else {
 				a.session.Stats.IncrementPortClosed()
