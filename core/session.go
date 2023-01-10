@@ -2,6 +2,7 @@ package core
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
@@ -388,7 +389,9 @@ func tarIt(source, target string) error {
 	}
 	defer tarFile.Close()
 
-	tarball := tar.NewWriter(tarFile)
+	gz := gzip.NewWriter(tarFile)
+
+	tarball := tar.NewWriter(gz)
 	defer tarball.Close()
 
 	return filepath.Walk(source,
