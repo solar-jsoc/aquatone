@@ -390,6 +390,7 @@ func tarIt(source, target string) error {
 	defer tarFile.Close()
 
 	gz := gzip.NewWriter(tarFile)
+	defer gz.Close()
 
 	tarball := tar.NewWriter(gz)
 	defer tarball.Close()
@@ -398,6 +399,10 @@ func tarIt(source, target string) error {
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
+			}
+
+			if path == source {
+				return nil
 			}
 
 			header, err := tar.FileInfoHeader(info, info.Name())
