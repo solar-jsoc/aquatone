@@ -19,75 +19,85 @@ func NewURLRequester() *URLRequester {
 	return &URLRequester{}
 }
 
-func (d *URLRequester) ID() string {
+func (ur *URLRequester) ID() string {
 	return "agent:url_requester"
 }
 
-func (a *URLRequester) Register(s *core.Session) error {
-	s.EventBus.SubscribeAsync(core.URL, a.OnURL, false)
-	a.session = s
+func (ur *URLRequester) Register(s *core.Session) error {
+	err := s.EventBus.SubscribeAsync(core.URL, ur.OnURL, false)
+	if err != nil {
+		return err
+	}
+
+	ur.session = s
+
 	return nil
 }
 
-func (a *URLRequester) OnURL(url string) {
-	a.session.Out.Debug("[%s] Received new URL %s\n", a.ID(), url)
-	a.session.WaitGroup.Add()
+func (ur *URLRequester) OnURL(url string) {
+	ur.session.Out.Debug("[%s] Received new URL %s\n", ur.ID(), url)
+
+	ur.session.WaitGroup.Add()
 	go func(url string) {
-		defer a.session.WaitGroup.Done()
-		http := Gorequest(a.session.Options)
+		defer ur.session.WaitGroup.Done()
+
+		http := Gorequest(ur.session.Options)
 		resp, _, errs := http.Get(url).
 			Set("User-Agent", RandomUserAgent()).
 			Set("X-Forwarded-For", RandomIPv4Address()).
 			Set("Via", fmt.Sprintf("1.1 %s", RandomIPv4Address())).
 			Set("Forwarded", fmt.Sprintf("for=%s;proto=http;by=%s", RandomIPv4Address(), RandomIPv4Address())).End()
-		var status string
+
 		if errs != nil {
-			a.session.Stats.IncrementRequestFailed()
+			ur.session.Stats.IncrementRequestFailed()
 			for _, err := range errs {
-				a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
+				ur.session.Out.Debug("[%s] Error: %v\n", ur.ID(), err)
 				if os.IsTimeout(err) {
-					a.session.Out.Error("%s: request timeout\n", url)
+					ur.session.Out.Error("%s: request timeout\n", url)
 					return
 				}
 			}
-			a.session.Out.Debug("%s: failed\n", url)
+			ur.session.Out.Debug("%s: failed\n", url)
 			return
 		}
 
-		a.session.Stats.IncrementRequestSuccessful()
+		ur.session.Stats.IncrementRequestSuccessful()
+
+		var status string
 		if resp.StatusCode >= 500 {
-			a.session.Stats.IncrementResponseCode5xx()
-			status = a.session.Out.Red(resp.Status)
+			ur.session.Stats.IncrementResponseCode5xx()
+			status = ur.session.Out.Red(resp.Status)
 		} else if resp.StatusCode >= 400 {
-			a.session.Stats.IncrementResponseCode4xx()
-			status = a.session.Out.Yellow(resp.Status)
+			ur.session.Stats.IncrementResponseCode4xx()
+			status = ur.session.Out.Yellow(resp.Status)
 		} else if resp.StatusCode >= 300 {
-			a.session.Stats.IncrementResponseCode3xx()
-			status = a.session.Out.Green(resp.Status)
+			ur.session.Stats.IncrementResponseCode3xx()
+			status = ur.session.Out.Green(resp.Status)
 		} else {
-			a.session.Stats.IncrementResponseCode2xx()
-			status = a.session.Out.Green(resp.Status)
+			ur.session.Stats.IncrementResponseCode2xx()
+			status = ur.session.Out.Green(resp.Status)
 		}
-		a.session.Out.Info("%s: %s\n", url, status)
 
-		page, err := a.createPageFromResponse(url, resp)
+		ur.session.Out.Info("%s: %s\n", url, status)
+
+		page, err := ur.createPageFromResponse(url, resp)
 		if err != nil {
-			a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
-			a.session.Out.Error("Failed to create page for URL: %s\n", url)
+			ur.session.Out.Debug("[%s] Error: %v\n", ur.ID(), err)
+			ur.session.Out.Error("Failed to create page for URL: %s\n", url)
 			return
 		}
 
-		a.writeHeaders(page)
-		if *a.session.Options.SaveBody {
-			a.writeBody(page, resp)
+		ur.writeHeaders(page)
+		if *ur.session.Options.SaveBody {
+			ur.writeBody(page, resp)
 		}
 
-		a.session.EventBus.Publish(core.URLResponsive, url)
+		ur.session.EventBus.Publish(core.URLResponsive, url)
 	}(url)
 }
 
-func (a *URLRequester) createPageFromResponse(url string, resp gorequest.Response) (*core.Page, error) {
-	page, err := a.session.AddPage(url)
+func (ur *URLRequester) createPageFromResponse(url string, resp gorequest.Response) (*core.Page, error) {
+	page, err := ur.session.AddPage(url)
 	if err != nil {
 		return nil, err
 	}
@@ -100,40 +110,42 @@ func (a *URLRequester) createPageFromResponse(url string, resp gorequest.Respons
 	return page, nil
 }
 
-func (a *URLRequester) writeHeaders(page *core.Page) {
+func (ur *URLRequester) writeHeaders(page *core.Page) {
 	filepath := fmt.Sprintf("headers/%s.txt", page.BaseFilename())
 	headers := fmt.Sprintf("%s\n", page.Status)
+
 	for _, header := range page.Headers {
 		headers += fmt.Sprintf("%v: %v\n", header.Name, header.Value)
 	}
-	if err := os.WriteFile(a.session.GetFilePath(filepath), []byte(headers), 0644); err != nil {
-		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
-		a.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+
+	if err := os.WriteFile(ur.session.GetFilePath(filepath), []byte(headers), 0644); err != nil {
+		ur.session.Out.Debug("[%s] Error: %v\n", ur.ID(), err)
+		ur.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, ur.session.GetFilePath(filepath))
 	}
 
-	if saved := a.session.IsFileSaved(a.session.GetFilePath(filepath), 30*time.Second); !saved {
-		a.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+	if saved := ur.session.IsFileSaved(ur.session.GetFilePath(filepath), 30*time.Second); !saved {
+		ur.session.Out.Error("Failed to write HTTP response headers for %s to %s\n", page.URL, ur.session.GetFilePath(filepath))
 	}
 
 	page.HeadersPath = filepath
 }
 
-func (a *URLRequester) writeBody(page *core.Page, resp gorequest.Response) {
+func (ur *URLRequester) writeBody(page *core.Page, resp gorequest.Response) {
 	filepath := fmt.Sprintf("html/%s.html", page.BaseFilename())
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
-		a.session.Out.Error("Failed to read response body for %s\n", page.URL)
+		ur.session.Out.Debug("[%s] Error: %v\n", ur.ID(), err)
+		ur.session.Out.Error("Failed to read response body for %s\n", page.URL)
 		return
 	}
 
-	if err := os.WriteFile(a.session.GetFilePath(filepath), body, 0644); err != nil {
-		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
-		a.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+	if err = os.WriteFile(ur.session.GetFilePath(filepath), body, 0644); err != nil {
+		ur.session.Out.Debug("[%s] Error: %v\n", ur.ID(), err)
+		ur.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, ur.session.GetFilePath(filepath))
 	}
 
-	if saved := a.session.IsFileSaved(a.session.GetFilePath(filepath), 30*time.Second); !saved {
-		a.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, a.session.GetFilePath(filepath))
+	if saved := ur.session.IsFileSaved(ur.session.GetFilePath(filepath), 30*time.Second); !saved {
+		ur.session.Out.Error("Failed to write HTTP response body for %s to %s\n", page.URL, ur.session.GetFilePath(filepath))
 	}
 
 	page.BodyPath = filepath

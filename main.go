@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -57,7 +56,7 @@ func main() {
 	sess.Out.Important("%s v%s started at %s\n\n", core.Name, core.Version, sess.Stats.StartedAt.Format(time.RFC3339))
 
 	if *sess.Options.SessionPath != "" {
-		jsonSession, err := ioutil.ReadFile(*sess.Options.SessionPath)
+		jsonSession, err := os.ReadFile(*sess.Options.SessionPath)
 		if err != nil {
 			sess.Out.Fatal("Unable to read session file at %s: %s\n", *sess.Options.SessionPath, err)
 			os.Exit(1)
@@ -73,7 +72,7 @@ func main() {
 		sess.Out.Important("Generating HTML report...")
 		var template []byte
 		if *sess.Options.TemplatePath != "" {
-			template, err = ioutil.ReadFile(*sess.Options.TemplatePath)
+			template, err = os.ReadFile(*sess.Options.TemplatePath)
 		} else {
 			template, err = sess.Asset("static/report_template.html")
 		}
@@ -100,14 +99,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	agents.NewTCPPortScanner().Register(sess)
-	agents.NewURLPublisher().Register(sess)
-	agents.NewURLRequester().Register(sess)
-	agents.NewURLHostnameResolver().Register(sess)
-	agents.NewURLPageTitleExtractor().Register(sess)
-	agents.NewURLScreenshotter().Register(sess)
-	agents.NewURLTechnologyFingerprinter().Register(sess)
-	agents.NewURLTakeoverDetector().Register(sess)
+	registerHandlers()
 
 	reader := bufio.NewReader(os.Stdin)
 	var targets []string
@@ -202,7 +194,7 @@ func main() {
 	sess.Out.Important("Generating HTML report...")
 	var template []byte
 	if *sess.Options.TemplatePath != "" {
-		template, err = ioutil.ReadFile(*sess.Options.TemplatePath)
+		template, err = os.ReadFile(*sess.Options.TemplatePath)
 	} else {
 		template, err = sess.Asset("static/report_template.html")
 	}
@@ -260,5 +252,39 @@ func main() {
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "tar failed: %v\n", err)
 		}
+	}
+}
+
+func registerHandlers() {
+	if err = agents.NewTCPPortScanner().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register TCPPortScanner: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLPublisher().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLPublisher: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLRequester().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLRequester: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLHostnameResolver().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLHostnameResolver: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLPageTitleExtractor().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLPageTitleExtractor: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLScreenshotter().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLScreenshotter: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLTechnologyFingerprinter().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLTechnologyFingerprinter: %s\n", err.Error())
+	}
+
+	if err = agents.NewURLTakeoverDetector().Register(sess); err != nil {
+		sess.Out.Error("Error: Unable to register URLTakeoverDetector: %s\n", err.Error())
 	}
 }

@@ -16,43 +16,48 @@ func NewTCPPortScanner() *TCPPortScanner {
 	return &TCPPortScanner{}
 }
 
-func (d *TCPPortScanner) ID() string {
+func (ps *TCPPortScanner) ID() string {
 	return "agent:tcp_port_scanner"
 }
 
-func (a *TCPPortScanner) Register(s *core.Session) error {
-	s.EventBus.SubscribeAsync(core.Host, a.OnHost, false)
-	a.session = s
+func (ps *TCPPortScanner) Register(s *core.Session) error {
+	err := s.EventBus.SubscribeAsync(core.Host, ps.OnHost, false)
+	if err != nil {
+		return err
+	}
+
+	ps.session = s
+
 	return nil
 }
 
-func (a *TCPPortScanner) OnHost(host string) {
-	a.session.Out.Debug("[%s] Received new host: %s\n", a.ID(), host)
-	for _, port := range a.session.Ports {
-		a.session.WaitGroup.Add()
+func (ps *TCPPortScanner) OnHost(host string) {
+	ps.session.Out.Debug("[%s] Received new host: %s\n", ps.ID(), host)
+	for _, port := range ps.session.Ports {
+		ps.session.WaitGroup.Add()
 		go func(port int, host string) {
-			defer a.session.WaitGroup.Done()
-			if a.scanPort(port, host) {
-				a.session.Stats.IncrementPortOpen()
-				a.session.Out.Info(
+			defer ps.session.WaitGroup.Done()
+			if ps.scanPort(port, host) {
+				ps.session.Stats.IncrementPortOpen()
+				ps.session.Out.Info(
 					"%s: port %s %s\n",
 					host,
-					a.session.Out.Green(fmt.Sprintf("%d", port)),
-					a.session.Out.Green("open"),
+					ps.session.Out.Green(fmt.Sprintf("%d", port)),
+					ps.session.Out.Green("open"),
 				)
-				a.session.EventBus.Publish(core.TCPPort, port, host)
+				ps.session.EventBus.Publish(core.TCPPort, port, host)
 			} else {
-				a.session.Stats.IncrementPortClosed()
-				a.session.Out.Debug("[%s] Port %d is closed on %s\n", a.ID(), port, host)
+				ps.session.Stats.IncrementPortClosed()
+				ps.session.Out.Debug("[%s] Port %d is closed on %s\n", ps.ID(), port, host)
 			}
 		}(port, host)
 	}
 }
 
-func (a *TCPPortScanner) scanPort(port int, host string) bool {
-	conn, _ := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), time.Duration(*a.session.Options.ScanTimeout)*time.Millisecond)
+func (ps *TCPPortScanner) scanPort(port int, host string) bool {
+	conn, _ := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), time.Duration(*ps.session.Options.ScanTimeout)*time.Millisecond)
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close()
 		return true
 	}
 	return false
