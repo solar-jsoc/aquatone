@@ -2,8 +2,6 @@ module sdg-git.solar.local/golang/aquatone
 
 go 1.19
 
-replace github.com/asaskevich/EventBus => /home/vslv/EventBus
-
 require (
 	github.com/PuerkitoBio/goquery v1.5.0
 	github.com/asaskevich/EventBus v0.0.0-20180315140547-d46933a94f05
