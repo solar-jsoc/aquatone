@@ -17,37 +17,41 @@ func NewURLPageTitleExtractor() *URLPageTitleExtractor {
 	return &URLPageTitleExtractor{}
 }
 
-func (a *URLPageTitleExtractor) ID() string {
+func (pe *URLPageTitleExtractor) ID() string {
 	return "agent:url_page_title_extractor"
 }
 
-func (a *URLPageTitleExtractor) Register(s *core.Session) error {
-	s.EventBus.SubscribeAsync(core.URLResponsive, a.OnURLResponsive, false)
-	a.session = s
+func (pe *URLPageTitleExtractor) Register(s *core.Session) error {
+	err := s.EventBus.SubscribeAsync(core.URLResponsive, pe.OnURLResponsive, false)
+	if err != nil {
+		return err
+	}
+
+	pe.session = s
 
 	return nil
 }
 
-func (a *URLPageTitleExtractor) OnURLResponsive(url string) {
-	a.session.Out.Debug("[%s] Received new responsive URL %s\n", a.ID(), url)
-	page := a.session.GetPage(url)
+func (pe *URLPageTitleExtractor) OnURLResponsive(url string) {
+	pe.session.Out.Debug("[%s] Received new responsive URL %s\n", pe.ID(), url)
+	page := pe.session.GetPage(url)
 	if page == nil {
-		a.session.Out.Error("Unable to find page for URL: %s\n", url)
+		pe.session.Out.Error("Unable to find page for URL: %s\n", url)
 		return
 	}
 
-	a.session.WaitGroup.Add()
+	pe.session.WaitGroup.Add()
 	go func(page *core.Page) {
-		defer a.session.WaitGroup.Done()
-		body, err := a.session.ReadFile(fmt.Sprintf("html/%s.html", page.BaseFilename()))
+		defer pe.session.WaitGroup.Done()
+		body, err := pe.session.ReadFile(fmt.Sprintf("html/%s.html", page.BaseFilename()))
 		if err != nil {
-			a.session.Out.Debug("[%s] Error reading HTML body file for %s: %s\n", a.ID(), page.URL, err)
+			pe.session.Out.Debug("[%s] Error reading HTML body file for %s: %s\n", pe.ID(), page.URL, err)
 			return
 		}
 
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 		if err != nil {
-			a.session.Out.Debug("[%s] Error when parsing HTML body file for %s: %s\n", a.ID(), page.URL, err)
+			pe.session.Out.Debug("[%s] Error when parsing HTML body file for %s: %s\n", pe.ID(), page.URL, err)
 			return
 		}
 

@@ -15,38 +15,42 @@ func NewURLHostnameResolver() *URLHostnameResolver {
 	return &URLHostnameResolver{}
 }
 
-func (a *URLHostnameResolver) ID() string {
+func (hr *URLHostnameResolver) ID() string {
 	return "agent:url_hostname_resolver"
 }
 
-func (a *URLHostnameResolver) Register(s *core.Session) error {
-	s.EventBus.SubscribeAsync(core.URLResponsive, a.OnURLResponsive, false)
-	a.session = s
+func (hr *URLHostnameResolver) Register(s *core.Session) error {
+	err := s.EventBus.SubscribeAsync(core.URLResponsive, hr.OnURLResponsive, false)
+	if err != nil {
+		return err
+	}
+
+	hr.session = s
 
 	return nil
 }
 
-func (a *URLHostnameResolver) OnURLResponsive(url string) {
-	a.session.Out.Debug("[%s] Received new responsive URL %s\n", a.ID(), url)
-	page := a.session.GetPage(url)
+func (hr *URLHostnameResolver) OnURLResponsive(url string) {
+	hr.session.Out.Debug("[%s] Received new responsive URL %s\n", hr.ID(), url)
+	page := hr.session.GetPage(url)
 	if page == nil {
-		a.session.Out.Error("Unable to find page for URL: %s\n", url)
+		hr.session.Out.Error("Unable to find page for URL: %s\n", url)
 		return
 	}
 
 	if page.IsIPHost() {
-		a.session.Out.Debug("[%s] Skipping hostname resolving on IP host: %s\n", a.ID(), url)
+		hr.session.Out.Debug("[%s] Skipping hostname resolving on IP host: %s\n", hr.ID(), url)
 		page.Addrs = []string{page.ParsedURL().Hostname()}
 		return
 	}
 
-	a.session.WaitGroup.Add()
+	hr.session.WaitGroup.Add()
 	go func(page *core.Page) {
-		defer a.session.WaitGroup.Done()
+		defer hr.session.WaitGroup.Done()
 		addrs, err := net.LookupHost(fmt.Sprintf("%s.", page.ParsedURL().Hostname()))
 		if err != nil {
-			a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
-			a.session.Out.Error("Failed to resolve hostname for %s\n", page.URL)
+			hr.session.Out.Debug("[%s] Error: %v\n", hr.ID(), err)
+			hr.session.Out.Error("Failed to resolve hostname for %s\n", page.URL)
 			return
 		}
 
