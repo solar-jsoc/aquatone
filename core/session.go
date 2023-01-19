@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -247,8 +246,8 @@ func (s *Session) initDirectories() {
 	}
 }
 
-func (s *Session) BaseFilenameFromURL(stru string) string {
-	u, err := url.Parse(stru)
+func (s *Session) BaseFilenameFromURL(str string) string {
+	u, err := url.Parse(str)
 	if err != nil {
 		return ""
 	}
@@ -260,6 +259,7 @@ func (s *Session) BaseFilenameFromURL(stru string) string {
 	pathHash := fmt.Sprintf("%x", h.Sum(nil))[0:16]
 	host := strings.Replace(u.Host, ":", "__", 1)
 	filename := fmt.Sprintf("%s__%s__%s", u.Scheme, strings.Replace(host, ".", "_", -1), pathHash)
+
 	return strings.ToLower(filename)
 }
 
@@ -268,7 +268,7 @@ func (s *Session) GetFilePath(p string) string {
 }
 
 func (s *Session) ReadFile(p string) ([]byte, error) {
-	content, err := ioutil.ReadFile(s.GetFilePath(p))
+	content, err := os.ReadFile(s.GetFilePath(p))
 	if err != nil {
 		return content, err
 	}
@@ -281,8 +281,9 @@ func (s *Session) ToJSON() string {
 }
 
 func (s *Session) SaveToFile(filename string) error {
-	path := s.GetFilePath(filename)
-	err := ioutil.WriteFile(path, []byte(s.ToJSON()), 0644)
+	filePath := s.GetFilePath(filename)
+
+	err := os.WriteFile(filePath, []byte(s.ToJSON()), 0644)
 	if err != nil {
 		return err
 	}
@@ -391,6 +392,8 @@ func tarIt(source, target string) error {
 
 	gz := gzip.NewWriter(tarFile)
 	defer gz.Close()
+
+	gz.Name = filepath.Base(target)
 
 	tarball := tar.NewWriter(gz)
 	defer tarball.Close()
