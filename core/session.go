@@ -358,42 +358,26 @@ func (s *Session) IsFileSaved(file string, timeout time.Duration) bool {
 
 func (s *Session) Tar() error {
 	tarName := "report.tar.gz"
-	tarPath := filepath.Join(os.TempDir(), tarName)
-
-	err := tarIt(*s.Options.OutDir, tarPath)
-	if err != nil {
-		return err
-	}
 
 	dst, err := os.Create(s.GetFilePath(tarName))
 	if err != nil {
 		return err
 	}
+	defer dst.Close()
 
-	src, err := os.Open(tarPath)
+	err = tarIt(*s.Options.OutDir, dst)
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		return err
-	}
-
-	return os.Remove(tarPath)
+	return nil
 }
 
-func tarIt(source, target string) error {
-	tarFile, err := os.Create(target)
-	if err != nil {
-		return err
-	}
-	defer tarFile.Close()
-
-	gz := gzip.NewWriter(tarFile)
+func tarIt(source string, targetFile *os.File) error {
+	gz := gzip.NewWriter(targetFile)
 	defer gz.Close()
 
-	gz.Name = filepath.Base(target)
+	gz.Name = filepath.Base(targetFile.Name())
 
 	tarball := tar.NewWriter(gz)
 	defer tarball.Close()
