@@ -388,7 +388,7 @@ func tarIt(source string, targetFile *os.File) error {
 				return err
 			}
 
-			if path == source {
+			if path == source || path == targetFile.Name() {
 				return nil
 			}
 
